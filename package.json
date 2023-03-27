@@ -1,0 +1,29 @@
+{
+  "name": "predictions",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/devJimmyboy/Streaks-Overlay.git",
+  "author": "Jimmyboy <devJimmyboy@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@types/canvas-confetti": "^1.6.0",
+    "@types/gsap": "^3.0.0",
+    "@types/howler": "^2.2.7",
+    "@types/jquery": "^3.5.14",
+    "@types/twemoji": "^13.1.2",
+    "axios": "^1.2.5",
+    "vite": "^4.1.4"
+  },
+  "dependencies": {
+    "@twurple/auth": "^6.0.9",
+    "@twurple/chat": "^6.0.9",
+    "canvas-confetti": "^1.6.0",
+    "gsap": "^3.11.5",
+    "howler": "^2.2.3",
+    "tone": "^14.7.77"
+  }
+}
