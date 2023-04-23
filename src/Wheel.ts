@@ -1,4 +1,4 @@
-import { ChatClient } from '@twurple/chat'
+// import { ChatClient } from '@twurple/chat'
 import { showOverlay } from './Overlay'
 import gsap from 'gsap'
 import { Howler, Howl } from 'howler'
@@ -8,12 +8,21 @@ import { Howler, Howl } from 'howler'
 // gsap.registerPlugin(Observer)
 
 const url = new URL(window.location.href)
+const defaultPalette = ['#FE4A49', '#2AB7CA', '#FED766', '#3B1F2B', '#383961']
 
 export class Wheel {
   canvas: HTMLCanvasElement
   ctx: CanvasRenderingContext2D
-  chat: ChatClient
-  segments: Segment[]
+  // chat: ChatClient
+  _segments: Segment[]
+  get segments() {
+    return this._segments
+  }
+  set segments(segments: Segment[]) {
+    this._segments = segments
+    this.recalculateSegments()
+  }
+
   outerRadius: number
   innerRadius: number
   numSegments: number
@@ -44,12 +53,12 @@ export class Wheel {
   lastTime: number = 0
   sounds = {
     tick: new Howl({
-      src: `./sfx/${url.searchParams.get('tickSound') ?? 'pacifier'}.mp3`,
+      src: `/wheel-live/sfx/${url.searchParams.get('tickSound') ?? 'pacifier'}.mp3`,
       mute: url.searchParams.get('mute')?.includes('tick') ?? false,
       volume: 0.15,
     }),
     twinkle: new Howl({
-      src: './sfx/twinkle.mp3',
+      src: '/wheel-live/sfx/twinkle.mp3',
       mute: url.searchParams.get('mute')?.includes('twinkle') ?? false,
     }),
   }
@@ -59,14 +68,14 @@ export class Wheel {
     return this.segments.reduce((acc, segment) => acc + segment.weight, 0)
   }
 
-  constructor() {
+  constructor(width?: number, height?: number, segments: Segment[] = []) {
     this.canvas = document.getElementById('wheel') as HTMLCanvasElement
-    this.canvas.height = window.innerHeight
-    this.canvas.width = window.innerWidth
+    this.canvas.height = height ?? window.innerHeight
+    this.canvas.width = width ?? window.innerWidth
     this.outerRadius = Math.min(this.canvas.width, this.canvas.height) / 2.25
     this.innerRadius = this.outerRadius * 0.4
     // Get segments from local storage
-    this.segments = JSON.parse(localStorage.getItem('segments') ?? '[]')
+    this.segments = segments
     this.recalculateSegments()
     this.ctx = this.canvas.getContext('2d')
     this.numSegments = 8
@@ -127,7 +136,7 @@ export class Wheel {
     this.ctx.textAlign = 'center'
     this.ctx.textBaseline = 'middle'
     const currSegment = this.getCurrentSegment()
-    if (currSegment.text !== this.lastSegment?.text) {
+    if (currSegment && currSegment.text !== this.lastSegment?.text) {
       this.lastSegment = currSegment
       this.sounds.tick.play()
     }
@@ -164,6 +173,7 @@ export class Wheel {
       for (let i = 0; i < this.segments.length; i++) {
         const segment = this.segments[i]
         const weight = segment.weight
+        if (weight === 0) continue
         this.ctx.fillStyle = segment.color
         this.ctx.beginPath()
         this.ctx.moveTo(0, 0)
@@ -183,6 +193,7 @@ export class Wheel {
 
       if (this.drawText) {
         for (const segment of this.segments) {
+          if (segment.weight === 0) continue
           this.ctx.save()
           this.ctx.textBaseline = 'middle'
           // draw text vertically in the midpoint of the arc
@@ -236,9 +247,8 @@ export class Wheel {
       await this.show()
     }
     console.log('spinning')
-    const tl = gsap.timeline()
-    const spinTo = Math.floor(Math.random() * (2 * Math.PI))
-    tl.fromTo(
+    const spinTo = Math.random() * (2 * Math.PI)
+    await gsap.fromTo(
       this,
       {
         rotationAngle: this.rotationAngle % (2 * Math.PI),
@@ -253,10 +263,10 @@ export class Wheel {
         //   }
         // },
       }
-    ).call(() => {
-      this.revealResult().then(() => {
-        this.isSpinning = false
-      })
+    )
+
+    await this.revealResult().then(() => {
+      this.isSpinning = false
     })
   }
 
@@ -309,22 +319,32 @@ export class Wheel {
       segmentStartAngle = segmentEndAngle
     }
   }
-  addSegment(text: string, color: string, weight: number = 1) {
+  addSegment(text: string, color?: string, weight: number = 1) {
+    console.debug(`Adding segment ${text} with weight ${weight} and color ${color}`)
+    if (!color) color = defaultPalette[this.segments.length % defaultPalette.length]
     this.segments.push({ text, color, weight })
     this.recalculateSegments()
-    localStorage.setItem('segments', JSON.stringify(this.segments))
+    // localStorage.setItem('segments', JSON.stringify(this.segments))
+  }
+
+  addSegmentFromDb(segment: Segment) {
+    console.debug(`Adding segment ${segment.text} with weight ${segment.weight} and color ${segment.color}`)
+    if (!segment.color) segment.color = defaultPalette[this.segments.length % defaultPalette.length]
+    this.segments.push(segment)
+    this.recalculateSegments()
+    // localStorage.setItem('segments', JSON.stringify(this.segments))
   }
 
   removeSegment(index: number) {
     this.segments.splice(index, 1)
     this.recalculateSegments()
-    localStorage.setItem('segments', JSON.stringify(this.segments))
+    // localStorage.setItem('segments', JSON.stringify(this.segments))
   }
 
   clearSegments() {
     this.segments = []
-    this.recalculateSegments()
-    localStorage.setItem('segments', JSON.stringify(this.segments))
+    // this.recalculateSegments()
+    // localStorage.setItem('segments', JSON.stringify(this.segments))
   }
 
   getCurrentSegment() {
@@ -356,6 +376,7 @@ export class Wheel {
 }
 
 interface Segment {
+  id?: number
   text: string
   color: string
   weight: number

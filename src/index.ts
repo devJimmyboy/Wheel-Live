@@ -1,6 +1,8 @@
 import './index.css'
+import $ from 'jquery'
 import { ChatClient } from '@twurple/chat'
 import { Wheel } from './Wheel'
+import { supabase } from './supabase'
 // import * as Tone from 'tone'
 
 declare global {
@@ -10,65 +12,94 @@ declare global {
   var importWheel: (text: string) => void
 }
 
+const errorText = $('#error-text')
+
 const defaultPalette = ['#FE4A49', '#2AB7CA', '#FED766', '#3B1F2B', '#383961']
 
 const url = new URL(window.location.href)
 var channel = url.searchParams.get('channel')
-
+var userId = url.searchParams.get('user')
+if (!channel) {
+  channel = 'devjimmyboy'
+}
+if (!userId) {
+  errorText.parent().removeClass('hidden')
+  errorText.text('Please go to https://overlays.jimmyboy.dev/wheel-live to sign in and get the right URL.')
+}
 window.chat = new ChatClient({
   channels: ['devjimmybot', channel],
 })
-window.wheel = new Wheel()
-// if (window.obsstudio) {
-//   Tone.start()
-// }
+const segmentPromise = supabase
+  .from('segments')
+  .select('*')
+  .eq('user_id', userId)
+  .then((res) => res.data)
+console.log(segmentPromise)
+if (!segmentPromise) {
+  errorText.parent().removeClass('hidden')
+  errorText.text('Please go to https://overlays.jimmyboy.dev/wheel-live to sign in and get the right URL.')
+}
+segmentPromise.then((segments) => {
+  window.wheel = new Wheel(
+    undefined,
+    undefined,
+    segments.map((segment, i) => {
+      const color = defaultPalette[i % defaultPalette.length]
+      console.log('color', color)
+      return { id: segment.id, text: segment.name, weight: segment.weight, color: color }
+    })
+  )
+  // if (window.obsstudio) {
+  //   Tone.start()
+  // }
 
-wheel.canvas.addEventListener('click', async (e) => {
-  // await Tone.start()
-  // console.log('audio is ready')
-  if (e.shiftKey) {
-    wheel.revealResult()
-  } else wheel.spin()
-})
-wheel.canvas.addEventListener('contextmenu', (e) => {
-  for (const segment of wheel.segments) {
-    console.log(segment)
-  }
-  e.preventDefault()
-})
-wheel.canvas.addEventListener('touchstart', () => wheel.spin())
-window.addEventListener('resize', () => wheel.resizeCanvas())
-window.addEventListener('keydown', (e) => {
-  if (e.key === ' ') {
-    console.log('spinning wheel')
-    wheel.spinByAngle(15)
-  }
+  wheel.canvas.addEventListener('click', async (e) => {
+    // await Tone.start()
+    // console.log('audio is ready')
+    if (e.shiftKey) {
+      wheel.revealResult()
+    } else wheel.spin()
+  })
+  wheel.canvas.addEventListener('contextmenu', (e) => {
+    for (const segment of wheel.segments) {
+      console.log(segment)
+    }
+    e.preventDefault()
+  })
+  wheel.canvas.addEventListener('touchstart', () => wheel.spin())
+  window.addEventListener('resize', () => wheel.resizeCanvas())
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ' ') {
+      console.log('spinning wheel')
+      wheel.spinByAngle(15)
+    }
+  })
 })
 
 chat.onJoin((channel, user) => {
   console.log(`Connected to ${channel} as ${user}`)
 })
-const addRegex = /!wheel add "(.*?)" (#[0-9a-fA-f]{3,6}|[a-z]+)? ([\.0-9]+)?/
-const importRegex = /([0-9]+)?,?(.*?)$/
+// const addRegex = /!wheel add "(.*?)" (#[0-9a-fA-f]{3,6}|[a-z]+)? ([\.0-9]+)?/
+// const importRegex = /([0-9]+)?,?(.*?)$/
 
-function importWheel(text: string) {
-  const lines = text.split(/[\n;]/)
-  console.log(lines)
-  wheel.clearSegments()
-  let num = 0
-  for (const line of lines) {
-    const match = importRegex.exec(line)
-    if (match) {
-      const weight = parseInt(match[1]) ?? undefined
-      const segment = match[2]
-      if (!segment) continue
-      console.log(segment, weight)
-      wheel.addSegment(segment, defaultPalette[num % defaultPalette.length], weight)
-      num++
-    }
-  }
-}
-window.importWheel = importWheel
+// function importWheel(text: string) {
+//   const lines = text.split(/[\n;]/)
+//   console.log(lines)
+//   wheel.clearSegments()
+//   let num = 0
+//   for (const line of lines) {
+//     const match = importRegex.exec(line)
+//     if (match) {
+//       const weight = parseInt(match[1]) ?? undefined
+//       const segment = match[2]
+//       if (!segment) continue
+//       console.log(segment, weight)
+//       wheel.addSegment(segment, defaultPalette[num % defaultPalette.length], weight)
+//       num++
+//     }
+//   }
+// }
+// window.importWheel = importWheel
 
 chat.onMessage(async (channel, user, message, msg) => {
   if (!message.toLowerCase().startsWith('!wheel')) return
@@ -80,15 +111,15 @@ chat.onMessage(async (channel, user, message, msg) => {
     case 'spin':
       wheel.spin()
       break
-    case 'add':
-      const match = addRegex.exec(message)
-      if (match) {
-        const segment = match[0]
-        const color = match[1] ?? 'red'
-        const weight = parseFloat(match[2]) ?? undefined
-        wheel.addSegment(segment, color, weight)
-      }
-      break
+    // case 'add':
+    //   const match = addRegex.exec(message)
+    //   if (match) {
+    //     const segment = match[0]
+    //     const color = match[1] ?? 'red'
+    //     const weight = parseFloat(match[2]) ?? undefined
+    //     wheel.addSegment(segment, color, weight)
+    //   }
+    //   break
     case 'remove':
       const index = wheel.segments.findIndex((s) => s.text === args.join(' '))
       if (!isNaN(index)) wheel.removeSegment(index)
@@ -96,15 +127,29 @@ chat.onMessage(async (channel, user, message, msg) => {
     case 'clear':
       wheel.clearSegments()
       break
-    case 'import':
-      let merged = args.join(' ')
-      if (merged.startsWith('http')) {
-        const response = await fetch(merged)
-        const text = await response.text()
-        merged = text
+    case 'choice':
+    case 'choose':
+      if (wheel.isSpinning) return
+      const oldSegments = [...wheel.segments]
+      wheel.clearSegments()
+      for (const segment of args) {
+        wheel.addSegment(segment)
       }
-      importWheel(merged)
-      break
+      await wheel.spin()
+      wheel.clearSegments()
+      for (const segment of oldSegments) {
+        wheel.addSegment(segment.text, segment.color, segment.weight)
+      }
+
+    // case 'import':
+    //   let merged = args.join(' ')
+    //   if (merged.startsWith('http')) {
+    //     const response = await fetch(merged)
+    //     const text = await response.text()
+    //     merged = text
+    //   }
+    //   importWheel(merged)
+    //   break
     case 'volume':
       const volume = parseFloat(args[0])
       if (!isNaN(volume)) {
@@ -115,6 +160,42 @@ chat.onMessage(async (channel, user, message, msg) => {
 })
 
 chat.connect()
+
+const subscription = supabase
+  .channel('any')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'segments' }, (payload) => {
+    console.log('Segment subscription payload:', payload)
+    const data: any = payload.new
+    if (payload.eventType !== 'DELETE' && data.user_id !== userId) {
+      return
+    }
+    switch (payload.eventType) {
+      case 'DELETE':
+        if (wheel.segments.some((s) => s.id === payload.old.id)) wheel.segments = wheel.segments.filter((segment) => segment.id !== payload.old.id)
+
+        break
+      case 'INSERT':
+        wheel.addSegmentFromDb({
+          ...data,
+        })
+        break
+      case 'UPDATE':
+        wheel.segments = wheel.segments.map((segment) => {
+          if (segment.id === data.id) {
+            return {
+              ...segment,
+              ...payload.new,
+            } as any
+          }
+          return segment
+        })
+
+        break
+    }
+  })
+  .subscribe((status) => {
+    console.log('Segment subscription status:', status)
+  })
 
 //     if (this.canvasId) {
 //       this.canvas = document.getElementById(this.canvasId) as HTMLCanvasElement

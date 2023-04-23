@@ -73,3 +73,8 @@ export async function showOverlay(toShow: string) {
   overlayTitle.textContent = toShow
   await tl.play(0)
 }
+
+export async function setConfetti(width = window.innerWidth, height = window.innerHeight) {
+  confettiCanvas.width = width
+  confettiCanvas.height = height
+}
